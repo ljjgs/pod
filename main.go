@@ -8,31 +8,29 @@ import (
 	opentracing2 "github.com/asim/go-micro/plugins/wrapper/trace/opentracing/v3"
 	"github.com/asim/go-micro/v3"
 	"github.com/asim/go-micro/v3/registry"
+	"github.com/asim/go-micro/v3/util/log"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
 	"github.com/ljjgs/pod/common"
 	"github.com/ljjgs/pod/domain/repository"
 	service2 "github.com/ljjgs/pod/domain/service"
 	"github.com/ljjgs/pod/handler"
-	hystrix2 "github.com/ljjgs/pod/plugins/hystrix"
 	"github.com/ljjgs/pod/proto/pod"
 	"github.com/opentracing/opentracing-go"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	"net"
-	"net/http"
 	"path/filepath"
 	"strconv"
 )
 
 var (
-	consulHost           = "162.14.77.55"
-	consulPort     int64 = 8500
-	tracerHost           = "162.14.77.55"
-	tracerPort           = 16686
-	hystrixPort          = 8761
-	prometheusPort       = "9090"
+	consulHost       = "162.14.77.55"
+	consulPort int64 = 8500
+	tracerHost       = "162.14.77.55"
+	tracerPort       = 16686
+	//hystrixPort          = 9002
+	prometheusPort = "9090"
 )
 
 func main() {
@@ -53,8 +51,9 @@ func main() {
 	mysqlInfo := common.GetMysqlFromConsul(config, "mysql")
 	dsn := mysqlInfo.User + ":" + mysqlInfo.Password + "@tcp(" + mysqlInfo.Host + ":" + mysqlInfo.Port + ")/" + mysqlInfo.DataSource + "?charset=utf8&parseTime=True&loc=Local"
 	db, err := gorm.Open("mysql", dsn)
+
 	if err != nil {
-		panic(err)
+		log.Errorf("数据库连接成功")
 	}
 	defer db.Close()
 	db.SingularTable(true)
@@ -67,12 +66,12 @@ func main() {
 	opentracing.SetGlobalTracer(tracer)
 	hystrixStreamHandler := hystrix.NewStreamHandler()
 	hystrixStreamHandler.Start()
-	go func() {
-		err := http.ListenAndServe(net.JoinHostPort("0.0.0.0", strconv.Itoa(hystrixPort)), hystrixStreamHandler)
-		if err != nil {
-			panic(err)
-		}
-	}()
+	//go func() {
+	//	err := http.ListenAndServe(net.JoinHostPort("0.0.0.0", strconv.Itoa(hystrixPort)), hystrixStreamHandler)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//}()
 
 	//	err = common.PrometheusBoot("162.14.77.55", prometheusPort)
 	//	if err != nil {
@@ -113,12 +112,11 @@ func main() {
 		micro.Registry(newRegistry),
 		micro.WrapHandler(opentracing2.NewHandlerWrapper(opentracing.GlobalTracer())),
 		micro.WrapClient(opentracing2.NewClientWrapper(opentracing.GlobalTracer())),
-		micro.WrapClient(hystrix2.NewClientHystrixWrapper()),
 		micro.WrapClient(ratelimit.NewClientWrapper(1000)),
 	)
 	service.Init()
 
-	err = repository.NewPodRepository(db).InitTable()
+	//err = repository.NewPodRepository(db).InitTable()
 
 	if err != nil {
 		panic(err)

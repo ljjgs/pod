@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"github.com/asim/go-micro/v3/util/log"
 	"github.com/ljjgs/pod/common"
 	"github.com/ljjgs/pod/domain/model"
 	"github.com/ljjgs/pod/domain/service"
@@ -15,9 +16,21 @@ type PodHandler struct {
 	PodDataService service.IPodDataService
 }
 
+func (e *PodHandler) DeletePod(ctx context.Context, id *pod.PodId, response *pod.Response) error {
+	//先查找数据
+	podModel, err := e.PodDataService.FindPodByID(id.Id)
+	if err != nil {
+		return err
+	}
+	if err := e.PodDataService.DeleteFromK8s(podModel); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (e *PodHandler) Delete(ctx context.Context, id *pod.PodId, response *pod.Response) error {
 	//先查找数据
-	podModel, err := e.PodDataService.FindPodById(id.Id)
+	podModel, err := e.PodDataService.FindPodByID(id.Id)
 	if err != nil {
 		return err
 	}
@@ -29,7 +42,7 @@ func (e *PodHandler) Delete(ctx context.Context, id *pod.PodId, response *pod.Re
 
 func (e *PodHandler) FindPodById(ctx context.Context, id *pod.PodId, response *pod.Response) error {
 	//查询pod数据
-	podModel, err := e.PodDataService.FindPodById(id.Id)
+	podModel, err := e.PodDataService.FindPodByID(id.Id)
 	if err != nil {
 		return err
 	}
@@ -62,11 +75,12 @@ func (e *PodHandler) FindAllPod(ctx context.Context, all *pod.FindAll, response 
 func (e *PodHandler) AddPod(ctx context.Context, info *pod.PodInfo, rsp *pod.Response) error {
 
 	podModel := &model.Pod{}
-
-	if err := e.PodDataService.CreatToK8s(info); err != nil {
-
+	log.Info("k8s 创建pod")
+	if err := e.PodDataService.CreateToK8s(info); err != nil {
+		log.Info("k8s 创建pod 失败")
 		return err
 	} else {
+		log.Info("k8s 创建成功")
 		//操作数据库写入数据
 		podID, err := e.PodDataService.AddPod(podModel)
 		if err != nil {
@@ -99,7 +113,7 @@ func (e *PodHandler) UpdatePod(ctx context.Context, req *pod.PodInfo, rsp *pod.R
 		return err
 	}
 	//查询数据库中的pod
-	podModel, err := e.PodDataService.FindPodById(req.Id)
+	podModel, err := e.PodDataService.FindPodByID(req.Id)
 	if err != nil {
 		return err
 	}
@@ -107,7 +121,7 @@ func (e *PodHandler) UpdatePod(ctx context.Context, req *pod.PodInfo, rsp *pod.R
 	if err != nil {
 		return err
 	}
-	e.PodDataService.Update(podModel)
+	e.PodDataService.UpdatePod(podModel)
 	return nil
 
 }
@@ -115,7 +129,7 @@ func (e *PodHandler) UpdatePod(ctx context.Context, req *pod.PodInfo, rsp *pod.R
 //查询单个信息
 func (e *PodHandler) FindPodByID(ctx context.Context, req *pod.PodId, rsp *pod.PodInfo) error {
 	//查询pod数据
-	_, err := e.PodDataService.FindPodById(req.Id)
+	_, err := e.PodDataService.FindPodByID(req.Id)
 	if err != nil {
 		return err
 	}

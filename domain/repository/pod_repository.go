@@ -41,12 +41,12 @@ func (p PodRepository) FindPodById(podId int64) (pod *model.Pod, error error) {
 }
 
 func (p PodRepository) CreatPod(pod *model.Pod) (int64, error) {
-	return pod.Id, p.mysqlDb.Create(pod).Error
+	return pod.ID, p.mysqlDb.Create(pod).Error
 }
 
 func (p PodRepository) Delete(i int64) error {
 	pod := &model.Pod{
-		Id: i,
+		ID: i,
 	}
 	return p.mysqlDb.Delete(pod).Error
 }

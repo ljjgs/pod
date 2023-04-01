@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"github.com/asim/go-micro/v3/util/log"
 	"github.com/ljjgs/pod/domain/model"
 	"github.com/ljjgs/pod/domain/repository"
 	"github.com/ljjgs/pod/proto/pod"
@@ -16,102 +18,149 @@ import (
 
 type IPodDataService interface {
 	AddPod(*model.Pod) (int64, error)
-	Delete(int64) error
-	Update(pod *model.Pod) error
-	FindPodById(int64) (*model.Pod, error)
-	FindAllPod() ([]*model.Pod, error)
-	CreatToK8s(info *pod.PodInfo) error
-	DeleteFromK8s(pod *model.Pod) error
-	UpdateToK8s(info *pod.PodInfo) error
+	DeletePod(int64) error
+	UpdatePod(*model.Pod) error
+	FindPodByID(int64) (*model.Pod, error)
+	FindAllPod() ([]model.Pod, error)
+	CreateToK8s(*pod.PodInfo) error
+	DeleteFromK8s(*model.Pod) error
+	UpdateToK8s(*pod.PodInfo) error
 }
+
+func NewPodDataService(podRepository repository.IPodRepository, clientSet *kubernetes.Clientset) IPodDataService {
+	return &PodDataService{
+		PodRepository: podRepository,
+		K8sClientSet:  clientSet,
+		deployment:    &v1.Deployment{},
+	}
+}
+
 type PodDataService struct {
 	PodRepository repository.IPodRepository
 	K8sClientSet  *kubernetes.Clientset
 	deployment    *v1.Deployment
 }
 
-func (p PodDataService) AddPod(m *model.Pod) (int64, error) {
-	return p.PodRepository.CreatPod(m)
-}
-
-func (p PodDataService) Delete(i int64) error {
-	return p.PodRepository.Delete(i)
-}
-
-func (p PodDataService) Update(pod *model.Pod) error {
-	return p.PodRepository.UpdatePod(pod)
-}
-
-func (p PodDataService) FindPodById(i int64) (*model.Pod, error) {
-	return p.PodRepository.FindPodById(i)
-}
-
-func (p PodDataService) FindAllPod() ([]*model.Pod, error) {
-	return p.PodRepository.FindAll()
-}
-
-func (p PodDataService) CreatToK8s(pod *pod.PodInfo) (error error) {
-	p.SetDeployment(pod)
-	//	去k8s里面去请求看看namespace是否存在
-	if _, error = p.K8sClientSet.AppsV1().Deployments(pod.PodNamespace).Get(
-		context.TODO(), pod.PodName, v12.GetOptions{}); error != nil {
-
-		if _, error = p.K8sClientSet.AppsV1().Deployments(pod.PodNamespace).Create(
-			context.TODO(), p.deployment, v12.CreateOptions{}); error != nil {
-			panic(error)
-			return error
-		}
-	}
-	return nil
-}
-
-func (p *PodDataService) DeleteFromK8s(pod *model.Pod) error {
-	if err := p.K8sClientSet.AppsV1().Deployments(pod.NameSpace).Delete(context.TODO(), pod.PodName, v12.DeleteOptions{}); err != nil {
-		return err
-	} else {
-		if err := p.Delete(pod.Id); err != nil {
+//创建pod到k8s中
+func (u *PodDataService) CreateToK8s(podInfo *pod.PodInfo) (err error) {
+	log.Info("pageinfo--------------")
+	log.Info(podInfo)
+	u.SetDeployment(podInfo)
+	if _, err = u.K8sClientSet.AppsV1().Deployments(podInfo.PodNamespace).Get(context.TODO(), podInfo.PodName, v12.GetOptions{}); err != nil {
+		if _, err = u.K8sClientSet.AppsV1().Deployments(podInfo.PodNamespace).Create(context.TODO(), u.deployment, v12.CreateOptions{}); err != nil {
+			log.Errorf("创建错误")
 			return err
 		}
+		log.Info("创建成功")
+		return nil
+	} else {
+		//可以写自己的业务逻辑
+		log.Error("Pod " + podInfo.PodName + "已经存在")
+		return errors.New("Pod " + podInfo.PodName + " 已经存在")
+	}
+
+}
+
+//更新deployment，pod
+func (u *PodDataService) UpdateToK8s(podInfo *pod.PodInfo) (err error) {
+	u.SetDeployment(podInfo)
+	if _, err = u.K8sClientSet.AppsV1().Deployments(podInfo.PodNamespace).Get(context.TODO(), podInfo.PodName, v12.GetOptions{}); err != nil {
+
+		return errors.New("Pod " + podInfo.PodName + " 不存在请先创建")
+	} else {
+		//如果存在
+		if _, err = u.K8sClientSet.AppsV1().Deployments(podInfo.PodNamespace).Update(context.TODO(), u.deployment, v12.UpdateOptions{}); err != nil {
+
+			return err
+		}
+		log.Info(podInfo.PodName + " 更新成功")
 		return nil
 	}
 
 }
 
-func (p PodDataService) UpdateToK8s(pod *pod.PodInfo) (error error) {
-	p.SetDeployment(pod)
-	if _, err := p.K8sClientSet.AppsV1().Deployments(pod.PodNamespace).Get(
-		context.TODO(), pod.PodName, v12.GetOptions{}); err != nil {
-		//			如果不存在
+//删除pod
+func (u *PodDataService) DeleteFromK8s(pod *model.Pod) (err error) {
+	if err = u.K8sClientSet.AppsV1().Deployments(pod.PodNamespace).Delete(context.TODO(), pod.PodName, v12.DeleteOptions{}); err != nil {
+		log.Error(err)
+		//写自己的业务逻辑
 		return err
 	} else {
-		if _, error := p.K8sClientSet.AppsV1().Deployments(pod.PodNamespace).Update(
-			context.TODO(), p.deployment, v12.UpdateOptions{}); error != nil {
-			return error
+		if err := u.DeletePod(pod.ID); err != nil {
+			return err
 		}
-		return nil
+		log.Info("删除Pod ID：" + strconv.FormatInt(pod.ID, 10) + " 成功！")
 	}
+	return
 }
 
-func NewPodDataService(repository repository.IPodRepository, clientSet *kubernetes.Clientset) IPodDataService {
-	return &PodDataService{
-		PodRepository: repository,
-		K8sClientSet:  clientSet,
-		deployment:    &v1.Deployment{},
+func (u *PodDataService) SetDeployment(podInfo *pod.PodInfo) {
+	deployment := &v1.Deployment{}
+	deployment.TypeMeta = v12.TypeMeta{
+		Kind:       "deployment",
+		APIVersion: "v1",
 	}
+	deployment.ObjectMeta = v12.ObjectMeta{
+		Name:      podInfo.PodName,
+		Namespace: podInfo.PodNamespace,
+		Labels: map[string]string{
+			"app-name": podInfo.PodName,
+			"author":   "Caplost",
+		},
+	}
+	deployment.Name = podInfo.PodName
+	deployment.Spec = v1.DeploymentSpec{
+		//副本个数
+		Replicas: &podInfo.PodReplicas,
+		Selector: &v12.LabelSelector{
+			MatchLabels: map[string]string{
+				"app-name": podInfo.PodName,
+			},
+			MatchExpressions: nil,
+		},
+		Template: v13.PodTemplateSpec{
+			ObjectMeta: v12.ObjectMeta{
+				Labels: map[string]string{
+					"app-name": podInfo.PodName,
+				},
+			},
+			Spec: v13.PodSpec{
+				Containers: []v13.Container{
+					{
+						Name:            podInfo.PodName,
+						Image:           podInfo.PodImage,
+						Ports:           u.getContainerPort(podInfo),
+						Env:             u.getEnv(podInfo),
+						Resources:       u.getResources(podInfo),
+						ImagePullPolicy: u.getImagePullPolicy(podInfo),
+					},
+				},
+			},
+		},
+		Strategy:                v1.DeploymentStrategy{},
+		MinReadySeconds:         0,
+		RevisionHistoryLimit:    nil,
+		Paused:                  false,
+		ProgressDeadlineSeconds: nil,
+	}
+	u.deployment = deployment
+
+	log.Info("Deployment")
+	log.Info(deployment)
 }
 
-func (p *PodDataService) getContainerPort(podInfo *pod.PodInfo) (containerPort []v13.ContainerPort) {
+func (u *PodDataService) getContainerPort(podInfo *pod.PodInfo) (containerPort []v13.ContainerPort) {
 	for _, v := range podInfo.PodPort {
 		containerPort = append(containerPort, v13.ContainerPort{
-			Name:          "port" + strconv.FormatInt(int64(v.ContainerPort), 10),
+			Name:          "port-" + strconv.FormatInt(int64(v.ContainerPort), 10),
 			ContainerPort: v.ContainerPort,
-			Protocol:      p.getProtocol(v.Protocol),
+			Protocol:      u.getProtocol(v.Protocol),
 		})
 	}
-	return containerPort
+	return
 }
 
-func (p *PodDataService) getProtocol(protocol string) v13.Protocol {
+func (u *PodDataService) getProtocol(protocol string) v13.Protocol {
 	switch protocol {
 	case "TCP":
 		return "TCP"
@@ -123,85 +172,35 @@ func (p *PodDataService) getProtocol(protocol string) v13.Protocol {
 		return "TCP"
 	}
 }
-func (p *PodDataService) getEnv(pod *pod.PodInfo) (env []v13.EnvVar) {
-	for _, v := range pod.PodEnv {
-		env = append(env, v13.EnvVar{
+
+func (u *PodDataService) getEnv(podInfo *pod.PodInfo) (envVar []v13.EnvVar) {
+	for _, v := range podInfo.PodEnv {
+		envVar = append(envVar, v13.EnvVar{
 			Name:      v.EnvKey,
 			Value:     v.EnvValue,
 			ValueFrom: nil,
 		})
 	}
-	return env
+	return
 }
 
-func (p *PodDataService) getResource(pod *pod.PodInfo) (source v13.ResourceRequirements) {
-
+func (u *PodDataService) getResources(podInfo *pod.PodInfo) (source v13.ResourceRequirements) {
+	//最大能够使用多少资源
 	source.Limits = v13.ResourceList{
-		"cpu":    resource.MustParse(strconv.FormatFloat(float64(pod.PodCpuMax), 'f', 6, 64)),
-		"memory": resource.MustParse(strconv.FormatFloat(float64(pod.PodMemoryMax), 'f', 6, 64)),
+		"cpu":    resource.MustParse(strconv.FormatFloat(float64(podInfo.PodCpuMax), 'f', 6, 64)),
+		"memory": resource.MustParse(strconv.FormatFloat(float64(podInfo.PodMemoryMax), 'f', 6, 64)),
 	}
-
+	//满足最少使用的资源量
+	//@TODO 自己实现动态设置
 	source.Requests = v13.ResourceList{
-		"cpu":    resource.MustParse(strconv.FormatFloat(float64(pod.PodCpuMax), 'f', 6, 64)),
-		"memory": resource.MustParse(strconv.FormatFloat(float64(pod.PodMemoryMax), 'f', 6, 64)),
+		"cpu":    resource.MustParse(strconv.FormatFloat(float64(podInfo.PodCpuMax), 'f', 6, 64)),
+		"memory": resource.MustParse(strconv.FormatFloat(float64(podInfo.PodMemoryMax), 'f', 6, 64)),
 	}
-	return source
+	return
 }
 
-func (p *PodDataService) SetDeployment(pod *pod.PodInfo) {
-	deployment := &v1.Deployment{}
-	deployment.TypeMeta = v12.TypeMeta{
-		Kind:       "deployment",
-		APIVersion: "v1",
-	}
-	deployment.ObjectMeta = v12.ObjectMeta{
-		Name:         pod.PodName,
-		GenerateName: "",
-		Namespace:    pod.PodNamespace,
-		Labels: map[string]string{
-			"app-name": pod.PodName,
-		},
-	}
-	deployment.Name = pod.PodName
-	deployment.Spec = v1.DeploymentSpec{
-		Replicas: &pod.PodReplicas,
-		Selector: &v12.LabelSelector{
-			MatchLabels: map[string]string{
-				"app-name": pod.PodName,
-			},
-			MatchExpressions: nil,
-		},
-		Template: v13.PodTemplateSpec{
-
-			ObjectMeta: v12.ObjectMeta{
-				Labels: map[string]string{
-					"app-name": pod.PodName,
-				},
-			},
-			Spec: v13.PodSpec{
-				Containers: []v13.Container{
-					{
-						Name:            pod.PodName,
-						Image:           pod.PodImages,
-						Ports:           p.getContainerPort(pod),
-						Env:             p.getEnv(pod),
-						Resources:       p.getResource(pod),
-						ImagePullPolicy: p.getImagePullPolicy(pod),
-					},
-				},
-			},
-		},
-		Strategy:                v1.DeploymentStrategy{},
-		MinReadySeconds:         0,
-		RevisionHistoryLimit:    nil,
-		Paused:                  false,
-		ProgressDeadlineSeconds: nil,
-	}
-
-}
-
-func (p PodDataService) getImagePullPolicy(pod *pod.PodInfo) v13.PullPolicy {
-	switch pod.PodPullPolicy {
+func (u *PodDataService) getImagePullPolicy(podInfo *pod.PodInfo) v13.PullPolicy {
+	switch podInfo.PodPullPolicy {
 	case "Always":
 		return "Always"
 	case "Never":
@@ -211,5 +210,29 @@ func (p PodDataService) getImagePullPolicy(pod *pod.PodInfo) v13.PullPolicy {
 	default:
 		return "Always"
 	}
+}
 
+//添加Pod
+func (u *PodDataService) AddPod(pod2 *model.Pod) (int64, error) {
+	return u.PodRepository.CreatPod(pod2)
+}
+
+//删除
+func (u *PodDataService) DeletePod(podID int64) error {
+	return u.PodRepository.Delete(podID)
+}
+
+//更新
+func (u *PodDataService) UpdatePod(pod2 *model.Pod) error {
+	return u.PodRepository.UpdatePod(pod2)
+}
+
+//单个查找
+func (u *PodDataService) FindPodByID(podID int64) (*model.Pod, error) {
+	return u.PodRepository.FindPodById(podID)
+}
+
+//查找所有
+func (u *PodDataService) FindAllPod() ([]model.Pod, error) {
+	return u.FindAllPod()
 }
