@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"github.com/asim/go-micro/v3/util/log"
 	"github.com/jinzhu/gorm"
 	"github.com/ljjgs/pod/domain/model"
@@ -10,20 +11,20 @@ type IPodRepository interface {
 	//初始化表
 	InitTable() error
 	//根据ID查找数据
-	FindPodByID(int64) (*model.Pod,error)
+	FindPodByID(int64) (*model.Pod, error)
 	//创建一条 Pod 数据
-	CreatePod(*model.Pod) (int64,error)
+	CreatePod(*model.Pod) (int64, error)
 	//根据ID删除一条 Pod 数据
 	DeletePodByID(int64) error
 	//修改一条数据
 	UpdatePod(*model.Pod) error
 	//查找Pod所有数据
-	FindAll()([]model.Pod,error)
+	FindAll() ([]model.Pod, error)
 }
 
 //创建 PodRepository
 func NewPodRepository(db *gorm.DB) IPodRepository {
-	return &PodRepository{mysqlDb:db}
+	return &PodRepository{mysqlDb: db}
 }
 
 type PodRepository struct {
@@ -31,50 +32,52 @@ type PodRepository struct {
 }
 
 //初始化表
-func (u *PodRepository)InitTable() error  {
-	return u.mysqlDb.CreateTable(&model.Pod{},&model.PodEnv{},&model.PodPort{}).Error
+func (u *PodRepository) InitTable() error {
+	return u.mysqlDb.CreateTable(&model.Pod{}, &model.PodEnv{}, &model.PodPort{}).Error
 }
 
 //根据ID查找Pod信息
 func (u *PodRepository) FindPodByID(podID int64) (pod *model.Pod, err error) {
 	pod = &model.Pod{}
-	return pod,u.mysqlDb.Preload("PodEnv").Preload("PodPort").First(pod,podID).Error
+	return pod, u.mysqlDb.Preload("PodEnv").Preload("PodPort").First(pod, podID).Error
 }
 
 //创建 Pod
-func (u *PodRepository) CreatePod(pod *model.Pod)(int64,error)  {
+func (u *PodRepository) CreatePod(pod *model.Pod) (int64, error) {
 	log.Info("add pod ")
-	log.Info(pod)
-	return pod.ID,u.mysqlDb.Create(pod).Error
+	fmt.Printf("PodNamespace"+pod.PodNamespace,"PodImage"+pod.PodImage,"PodTeamID"+pod.PodTeamID,"PodPullPolicy"+pod.PodPullPolicy)
+
+
+	return pod.ID, u.mysqlDb.Create(pod).Error
 }
 
 //根据 ID 删除 Pod 信息
 func (u *PodRepository) DeletePodByID(podID int64) error {
-	tx :=u.mysqlDb.Begin()
+	tx := u.mysqlDb.Begin()
 	//遇到问题回滚
 	defer func() {
-		if r:=recover();r!=nil {
+		if r := recover(); r != nil {
 			tx.Rollback()
 		}
 	}()
-	if tx.Error !=nil {
+	if tx.Error != nil {
 		return tx.Error
 	}
 
 	//彻底删除 POD 信息
-	if err:= u.mysqlDb.Where("id = ?",podID).Delete(&model.Pod{}).Error;err!=nil{
+	if err := u.mysqlDb.Where("id = ?", podID).Delete(&model.Pod{}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
 	//彻底删除 podenv 信息
-	if err:= u.mysqlDb.Where("pod_id = ?",podID).Delete(&model.PodEnv{}).Error;err!=nil{
+	if err := u.mysqlDb.Where("pod_id = ?", podID).Delete(&model.PodEnv{}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 
 	//彻底删除 podport 信息
-	if err:= u.mysqlDb.Where("pod_id = ?",podID).Delete(&model.PodPort{}).Error;err!=nil {
+	if err := u.mysqlDb.Where("pod_id = ?", podID).Delete(&model.PodPort{}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -87,6 +90,6 @@ func (u *PodRepository) UpdatePod(pod *model.Pod) error {
 }
 
 //获取结果集合
-func (u *PodRepository) FindAll()(podAll []model.Pod,err error)  {
-	return podAll,u.mysqlDb.Find(&podAll).Error
+func (u *PodRepository) FindAll() (podAll []model.Pod, err error) {
+	return podAll, u.mysqlDb.Find(&podAll).Error
 }

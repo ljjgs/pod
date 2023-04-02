@@ -116,7 +116,7 @@ func main() {
 	)
 	service.Init()
 
-	err = repository.NewPodRepository(db).InitTable()
+	//err = repository.NewPodRepository(db).InitTable()
 
 	if err != nil {
 		panic(err)

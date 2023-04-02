@@ -38,7 +38,6 @@ type PodInfo struct {
 	PodRestart    string     `protobuf:"bytes,11,opt,name=pod_restart,json=podRestart,proto3" json:"pod_restart,omitempty"`
 	PodType       string     `protobuf:"bytes,12,opt,name=pod_type,json=podType,proto3" json:"pod_type,omitempty"`
 	PodImage      string     `protobuf:"bytes,13,opt,name=pod_image,json=podImage,proto3" json:"pod_image,omitempty"`
-
 }
 
 func (x *PodInfo) Reset() {

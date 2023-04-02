@@ -43,12 +43,10 @@ type PodDataService struct {
 
 //创建pod到k8s中
 func (u *PodDataService) CreateToK8s(podInfo *pod.PodInfo) (err error) {
-	log.Info("pageinfo--------------")
-	log.Info(podInfo)
 	u.SetDeployment(podInfo)
 	if _, err = u.K8sClientSet.AppsV1().Deployments(podInfo.PodNamespace).Get(context.TODO(), podInfo.PodName, v12.GetOptions{}); err != nil {
 		if _, err = u.K8sClientSet.AppsV1().Deployments(podInfo.PodNamespace).Create(context.TODO(), u.deployment, v12.CreateOptions{}); err != nil {
-			log.Errorf("创建错误")
+			log.Error(err)
 			return err
 		}
 		log.Info("创建成功")
