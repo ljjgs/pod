@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"github.com/asim/go-micro/v3/util/log"
 	"github.com/jinzhu/gorm"
 	"github.com/ljjgs/pod/domain/model"
 )
@@ -42,6 +43,8 @@ func (u *PodRepository) FindPodByID(podID int64) (pod *model.Pod, err error) {
 
 //创建 Pod
 func (u *PodRepository) CreatePod(pod *model.Pod)(int64,error)  {
+	log.Info("add pod ")
+	log.Info(pod)
 	return pod.ID,u.mysqlDb.Create(pod).Error
 }
 
