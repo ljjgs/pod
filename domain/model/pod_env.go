@@ -1,8 +1,8 @@
 package model
 
 type PodEnv struct {
-	Id       int64  `gorm:"primary_key;not_null;auto_increment" json:"id"`
-	PodId    int64  `json:"pod_id"`
-	EnvKey   string `json:"env_key"`
+	ID int64 `gorm:"primary_key;not_null;auto_increment" json:"id"`
+	PodID int64 `json:"pod_id"`
+	EnvKey string `json:"env_key"`
 	EnvValue string `json:"env_value"`
 }
