@@ -214,12 +214,12 @@ func (u *PodDataService) getImagePullPolicy(podInfo *pod.PodInfo) v13.PullPolicy
 
 //添加Pod
 func (u *PodDataService) AddPod(pod2 *model.Pod) (int64, error) {
-	return u.PodRepository.CreatPod(pod2)
+	return u.PodRepository.CreatePod(pod2)
 }
 
 //删除
 func (u *PodDataService) DeletePod(podID int64) error {
-	return u.PodRepository.Delete(podID)
+	return u.PodRepository.DeletePodByID(podID)
 }
 
 //更新
@@ -229,7 +229,7 @@ func (u *PodDataService) UpdatePod(pod2 *model.Pod) error {
 
 //单个查找
 func (u *PodDataService) FindPodByID(podID int64) (*model.Pod, error) {
-	return u.PodRepository.FindPodById(podID)
+	return u.PodRepository.FindPodByID(podID)
 }
 
 //查找所有
